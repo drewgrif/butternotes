@@ -1,0 +1,138 @@
+#!/bin/bash
+
+# Project-focused notes interface for ButterNotes
+# Shows only notes belonging to a selected project
+
+source "${HOME}/GitHub/butternotes/config/notes.conf"
+
+# For testing, allow override of NOTES_DIR
+NOTES_DIR="${TEST_NOTES_DIR:-$NOTES_DIR}"
+PROJECTS_DIR="$NOTES_DIR/.projects"
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUTTER_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Function to select a project
+select_project() {
+    local project_files=("$PROJECTS_DIR"/*.project)
+    if [[ ! -e "${project_files[0]}" ]]; then
+        echo -e "${RED}No projects found${NC}"
+        exit 1
+    fi
+    
+    # Build project list with details
+    local project_list=""
+    for pf in "${project_files[@]}"; do
+        [[ -f "$pf" ]] || continue
+        
+        name=$(grep "^name:" "$pf" | sed 's/name: "\(.*\)"/\1/')
+        status=$(grep "^status:" "$pf" | sed 's/status: "\(.*\)"/\1/')
+        deadline=$(grep "^deadline:" "$pf" | sed 's/deadline: "\(.*\)"/\1/')
+        notes_count=$(grep -A 100 "^notes:" "$pf" | grep -c "^  - ")
+        
+        # Format project entry
+        local entry="$name [$status]"
+        [[ -n "$deadline" ]] && entry="$entry (Due: $deadline)"
+        entry="$entry - $notes_count notes"
+        
+        project_list+="$entry|$pf"$'\n'
+    done
+    
+    # Select project with fzf
+    local selected=$(echo -n "$project_list" | fzf \
+        --delimiter='|' \
+        --with-nth=1 \
+        --prompt="Select project > " \
+        --height=40% \
+        --layout=reverse \
+        --border)
+    
+    [[ -n "$selected" ]] && echo "${selected##*|}"
+}
+
+# Get project file
+PROJECT_FILE="${1:-$(select_project)}"
+
+if [[ ! -f "$PROJECT_FILE" ]]; then
+    echo -e "${RED}No project selected${NC}"
+    exit 1
+fi
+
+# Extract project details
+PROJECT_NAME=$(grep "^name:" "$PROJECT_FILE" | sed 's/name: "\(.*\)"/\1/')
+PROJECT_STATUS=$(grep "^status:" "$PROJECT_FILE" | sed 's/status: "\(.*\)"/\1/')
+PROJECT_DEADLINE=$(grep "^deadline:" "$PROJECT_FILE" | sed 's/deadline: "\(.*\)"/\1/')
+
+# Get notes in project
+PROJECT_NOTES=()
+while IFS= read -r line; do
+    if [[ "$line" =~ ^[[:space:]]*-[[:space:]]\"(.+)\" ]]; then
+        note_path="${BASH_REMATCH[1]}"
+        full_path="$NOTES_DIR/$note_path"
+        [[ -f "$full_path" ]] && PROJECT_NOTES+=("$full_path")
+    fi
+done < <(grep -A 1000 "^notes:" "$PROJECT_FILE")
+
+# Handle --list-only for reloads
+[[ "$2" == "--list-only" ]] && {
+    printf "%s\n" "${PROJECT_NOTES[@]}"
+    exit 0
+}
+
+# fzf options
+fzf_opts=(
+    --height=80% --layout=reverse --border 
+    --prompt="📁 $PROJECT_NAME > " 
+    --info=hidden
+    --bind "ctrl-n:execute($BUTTER_ROOT/bin/quick-note)+execute-silent($BUTTER_ROOT/bin/note-projects add '$PROJECT_NAME' '{}')+reload($0 '$PROJECT_FILE' --list-only)"
+    --bind "ctrl-r:execute-silent($BUTTER_ROOT/bin/note-projects remove '$PROJECT_NAME' '{}')+reload($0 '$PROJECT_FILE' --list-only)"
+    --bind "ctrl-s:execute($BUTTER_ROOT/bin/note-search --project '$PROJECT_NAME')"
+    --bind "ctrl-p:abort"
+    --bind "ctrl-a:execute($BUTTER_ROOT/bin/note-projects add '$PROJECT_NAME' \$(find '$NOTES_DIR' -name '*.md' | fzf))+reload($0 '$PROJECT_FILE' --list-only)"
+    --bind "enter:execute($NOTES_EDITOR '{}')"
+)
+
+# Add preview
+[[ "$ENABLE_PREVIEW" == "true" ]] && command -v bat >/dev/null 2>&1 && 
+    fzf_opts+=(--preview "bat --color=always --style=header,grid --line-range :50 '{}'" --preview-window "$PREVIEW_SIZE")
+
+# Header
+echo
+echo -e "${BLUE}📁 Project: $PROJECT_NAME${NC}"
+echo -e "Status: ${GREEN}$PROJECT_STATUS${NC} | Notes: ${#PROJECT_NOTES[@]}"
+[[ -n "$PROJECT_DEADLINE" ]] && echo -e "Deadline: ${YELLOW}$PROJECT_DEADLINE${NC}"
+echo
+echo "Enter: Open  │  Ctrl-N: New Note  │  Ctrl-A: Add Existing  │  Ctrl-R: Remove  │  Ctrl-P: Back"
+
+# Format notes for display
+format_project_notes() {
+    while IFS= read -r file; do
+        rel_path="${file#$NOTES_DIR/}"
+        basename=$(basename "$file")
+        dirname=$(dirname "$rel_path")
+        
+        if [[ "$dirname" != "." ]]; then
+            printf "\033[36m%s\033[0m > %s\n" "$dirname" "$basename"
+        else
+            echo "$basename"
+        fi
+    done
+}
+
+# Show notes in project
+if [[ ${#PROJECT_NOTES[@]} -eq 0 ]]; then
+    echo
+    echo "No notes in this project yet."
+    echo "Press Ctrl-N to create a new note or Ctrl-A to add existing notes."
+    read -n 1
+else
+    printf "%s\n" "${PROJECT_NOTES[@]}" | format_project_notes | fzf "${fzf_opts[@]}" --ansi
+fi

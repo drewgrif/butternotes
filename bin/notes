@@ -34,6 +34,10 @@ fzf_opts=(
     --bind "ctrl-x:execute($BUTTER_ROOT/bin/move-note '{2}')+reload($BUTTER_ROOT/bin/notes --list-only)"
     --bind "ctrl-s:execute($BUTTER_ROOT/bin/note-search)"
     --bind "ctrl-y:execute($BUTTER_ROOT/bin/note-sync sync)+reload($BUTTER_ROOT/bin/notes --list-only)"
+    --bind "ctrl-b:execute($BUTTER_ROOT/bin/note-links backlinks '{2}')"
+    --bind "ctrl-l:execute($BUTTER_ROOT/bin/note-links list '{2}')"
+    --bind "ctrl-p:execute($BUTTER_ROOT/bin/project-notes)"
+    --bind "alt-p:execute($BUTTER_ROOT/bin/note-projects add \$($BUTTER_ROOT/bin/note-projects select) '{2}')"
     --bind "enter:execute($NOTES_EDITOR '{2}')"
 )
 
@@ -46,7 +50,7 @@ fzf_opts=(
 echo
 echo "📝 ButterNotes"
 echo "Enter: Open  │  Ctrl-N: New  │  Ctrl-D: Del  │  Ctrl-X: Move  │  Ctrl-S: Search  │  Ctrl-Y: Sync"
-echo "Tip: Use Ctrl-X to organize notes into folders (create your own categories)"
+echo "Ctrl-B: Backlinks  │  Ctrl-L: List Links  │  Ctrl-P: Projects  │  Alt-P: Add to Project"
 
 # Format file list with colors and tab delimiter
 format_files() {

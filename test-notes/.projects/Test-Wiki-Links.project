@@ -1,0 +1,9 @@
+name: "Test Wiki Links"
+created: "2025-01-24"
+deadline: "2025-02-01"
+status: "active"
+tags: ["development", "features"]
+description: "Testing the new wiki-style linking feature"
+notes:
+  - "First-Note.md"
+  - "Second-Note.md"

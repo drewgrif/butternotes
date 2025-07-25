@@ -1,0 +1,197 @@
+#!/bin/bash
+
+# Wiki-style link handling for ButterNotes
+# Supports [[Note Title]] style links
+
+source "${HOME}/GitHub/butternotes/config/notes.conf"
+
+# For testing, allow override of NOTES_DIR
+NOTES_DIR="${TEST_NOTES_DIR:-$NOTES_DIR}"
+
+# Function to extract wiki links from a file
+extract_links() {
+    local file="$1"
+    grep -o '\[\[[^]]*\]\]' "$file" 2>/dev/null | sed 's/\[\[\(.*\)\]\]/\1/'
+}
+
+# Function to find note by title
+find_note_by_title() {
+    local title="$1"
+    
+    # Check if title contains a path separator
+    if [[ "$title" == */* ]]; then
+        # Handle folder/note format
+        local folder="${title%/*}"
+        local note_name="${title#*/}"
+        local clean_name="${note_name// /-}"
+        
+        # Try exact match in specified folder
+        local exact_match=$(find "$NOTES_DIR/$folder" -name "${clean_name}.${NOTES_EXT}" -type f 2>/dev/null | head -1)
+        if [[ -n "$exact_match" ]]; then
+            echo "$exact_match"
+            return 0
+        fi
+        
+        # Try partial match in specified folder
+        local partial_match=$(find "$NOTES_DIR/$folder" -iname "*${note_name}*.$NOTES_EXT" -type f 2>/dev/null | head -1)
+        if [[ -n "$partial_match" ]]; then
+            echo "$partial_match"
+            return 0
+        fi
+    else
+        # Handle simple note name
+        local clean_title="${title// /-}"
+        
+        # Try exact match first
+        local exact_match=$(find "$NOTES_DIR" -name "${clean_title}.${NOTES_EXT}" -type f 2>/dev/null | head -1)
+        if [[ -n "$exact_match" ]]; then
+            echo "$exact_match"
+            return 0
+        fi
+        
+        # Try case-insensitive partial match
+        local partial_match=$(find "$NOTES_DIR" -iname "*${title}*.$NOTES_EXT" -type f 2>/dev/null | head -1)
+        if [[ -n "$partial_match" ]]; then
+            echo "$partial_match"
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+# Function to get backlinks (notes that link to the given note)
+get_backlinks() {
+    local note_path="$1"
+    local note_name=$(basename "$note_path" ".${NOTES_EXT}")
+    
+    # Also try with spaces instead of hyphens
+    local note_title="${note_name//-/ }"
+    
+    # Search for various link formats (both hyphenated and spaced versions)
+    rg -l "\[\[($note_name|$note_title)\]\]|\[\[[^/]*/($note_name|$note_title)\]\]" "$NOTES_DIR" --glob "*.${NOTES_EXT}" -P 2>/dev/null | grep -v "$note_path"
+}
+
+# Function to follow link at cursor position
+follow_link() {
+    local current_file="$1"
+    local line_number="${2:-1}"
+    
+    # Extract links from the current line
+    local line_content=$(sed -n "${line_number}p" "$current_file" 2>/dev/null)
+    local links=$(echo "$line_content" | grep -o '\[\[[^]]*\]\]' | sed 's/\[\[\(.*\)\]\]/\1/')
+    
+    if [[ -z "$links" ]]; then
+        echo "No wiki link found on current line"
+        return 1
+    fi
+    
+    # If multiple links on line, use fzf to select
+    local selected_link
+    if [[ $(echo "$links" | wc -l) -gt 1 ]]; then
+        if [[ -t 0 ]]; then
+            selected_link=$(echo "$links" | fzf --prompt="Select link: ")
+        else
+            # Non-interactive mode: use first link
+            selected_link=$(echo "$links" | head -1)
+        fi
+    else
+        selected_link="$links"
+    fi
+    
+    if [[ -z "$selected_link" ]]; then
+        return 1
+    fi
+    
+    # Find and open the linked note
+    local target_note=$(find_note_by_title "$selected_link")
+    if [[ -n "$target_note" ]]; then
+        echo "$target_note"
+    else
+        echo "Note not found: $selected_link"
+        return 1
+    fi
+}
+
+# Function to validate all links in a note
+validate_links() {
+    local note_file="$1"
+    local links=$(extract_links "$note_file")
+    local broken_links=()
+    
+    while IFS= read -r link; do
+        if [[ -n "$link" ]]; then
+            if ! find_note_by_title "$link" >/dev/null; then
+                broken_links+=("$link")
+            fi
+        fi
+    done <<< "$links"
+    
+    if [[ ${#broken_links[@]} -eq 0 ]]; then
+        echo "All links valid in $(basename "$note_file")"
+    else
+        echo "Broken links in $(basename "$note_file"):"
+        printf '  - [[%s]]\n' "${broken_links[@]}"
+    fi
+}
+
+# Main command handling
+case "$1" in
+    "follow")
+        follow_link "$2" "$3"
+        ;;
+    
+    "backlinks")
+        if [[ -z "$2" ]]; then
+            echo "Usage: note-links backlinks <note-file>"
+            exit 1
+        fi
+        
+        backlinks=$(get_backlinks "$2")
+        if [[ -n "$backlinks" ]]; then
+            echo "Notes linking to $(basename "$2"):"
+            echo "$backlinks"
+        else
+            echo "No backlinks found"
+        fi
+        ;;
+    
+    "validate")
+        if [[ -z "$2" ]]; then
+            # Validate all notes
+            find "$NOTES_DIR" -name "*.${NOTES_EXT}" -type f | while read -r note; do
+                validate_links "$note"
+            done
+        else
+            validate_links "$2"
+        fi
+        ;;
+    
+    "list")
+        # List all links in a note
+        if [[ -z "$2" ]]; then
+            echo "Usage: note-links list <note-file>"
+            exit 1
+        fi
+        
+        links=$(extract_links "$2")
+        if [[ -n "$links" ]]; then
+            echo "Links in $(basename "$2"):"
+            echo "$links" | sed 's/^/  - /'
+        else
+            echo "No links found"
+        fi
+        ;;
+    
+    *)
+        echo "ButterNotes Link Manager"
+        echo ""
+        echo "Usage: note-links <command> [args]"
+        echo ""
+        echo "Commands:"
+        echo "  follow <file> [line]  - Follow wiki link at cursor position"
+        echo "  backlinks <file>      - Show all notes linking to this note"
+        echo "  validate [file]       - Check for broken links"
+        echo "  list <file>          - List all links in a note"
+        ;;
+esac
