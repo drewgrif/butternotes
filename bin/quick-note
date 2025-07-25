@@ -1,0 +1,110 @@
+#!/bin/bash
+
+# Quick note creation with templates
+# Usage: quick-note [title] [template]
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUTTER_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Load configuration
+source "$BUTTER_ROOT/config/notes.conf" 2>/dev/null || {
+    NOTES_DIR="$HOME/notes"
+    NOTES_EDITOR="nvim"
+    NOTES_EXT="md"
+    DATE_FORMAT="%Y-%m-%d"
+    TEMPLATES_DIR="$BUTTER_ROOT/templates"
+}
+
+# Ensure notes directory exists
+mkdir -p "$NOTES_DIR"
+
+# Get current date
+current_date=$(date +"$DATE_FORMAT")
+current_datetime=$(date +"%Y-%m-%d %H:%M")
+
+# Function to replace template variables
+replace_template_vars() {
+    local template_file="$1"
+    local title="$2"
+    local output_file="$3"
+    
+    sed -e "s/{{TITLE}}/$title/g" \
+        -e "s/{{DATE}}/$current_datetime/g" \
+        "$template_file" > "$output_file"
+}
+
+# If called with arguments, use them
+if [[ $# -gt 0 ]]; then
+    title="$1"
+    template_type="${2:-default}"
+else
+    # Interactive mode
+    echo "📝 Quick Note Creation"
+    echo
+    
+    # Choose template
+    if [[ -d "$TEMPLATES_DIR" ]]; then
+        echo "Available templates:"
+        templates=($(find "$TEMPLATES_DIR" -name "*.md" -exec basename {} .md \;))
+        for i in "${!templates[@]}"; do
+            echo "  $((i+1)). ${templates[$i]}"
+        done
+        echo
+        
+        read -p "Choose template (1-${#templates[@]}) or 'd' for daily note [default]: " choice
+        
+        if [[ "$choice" == "d" ]]; then
+            template_type="daily"
+            title="Daily-$(date +%Y-%m-%d)"
+        elif [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le "${#templates[@]}" ]]; then
+            template_type="${templates[$((choice-1))]}"
+        else
+            template_type="default"
+        fi
+    else
+        template_type="default"
+    fi
+    
+    # Get title if not set
+    if [[ -z "$title" ]]; then
+        read -p "Note title: " title
+        [[ -z "$title" ]] && title="Note-$(date +%Y-%m-%d-%H%M)"
+    fi
+fi
+
+# Sanitize filename
+filename=$(echo "$title" | sed 's/[^a-zA-Z0-9._-]/-/g' | sed 's/--*/-/g')
+note_path="$NOTES_DIR/${filename}.$NOTES_EXT"
+
+# Check if note already exists
+if [[ -f "$note_path" ]]; then
+    echo "Note already exists: $note_path"
+    read -p "Open existing note? (y/N): " open_existing
+    if [[ "$open_existing" =~ ^[Yy]$ ]]; then
+        exec "$NOTES_EDITOR" "$note_path"
+    else
+        exit 1
+    fi
+fi
+
+# Use template if available
+template_file="$TEMPLATES_DIR/${template_type}.md"
+if [[ -f "$template_file" ]]; then
+    replace_template_vars "$template_file" "$title" "$note_path"
+    echo "Created note from template: $note_path"
+else
+    # Create basic note
+    cat > "$note_path" << EOF
+# $title
+
+**Created:** $current_datetime
+
+---
+
+EOF
+    echo "Created note: $note_path"
+fi
+
+# Open in editor
+exec "$NOTES_EDITOR" "$note_path"

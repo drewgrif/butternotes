@@ -1,0 +1,85 @@
+#!/bin/bash
+
+# Advanced content search through notes
+# Usage: note-search [search_term]
+
+# Load configuration
+source "$HOME/ButterNotes/config/notes.conf" 2>/dev/null || {
+    NOTES_DIR="$HOME/notes"
+    NOTES_EDITOR="nvim"
+    NOTES_EXT="md"
+    ENABLE_PREVIEW=true
+    PREVIEW_SIZE="50%"
+}
+
+# Ensure notes directory exists
+mkdir -p "$NOTES_DIR"
+
+# Check if ripgrep is available
+if ! command -v rg >/dev/null 2>&1; then
+    echo "Error: ripgrep (rg) is required for content search"
+    echo "Install with: sudo apt install ripgrep"
+    exit 1
+fi
+
+# Get search term
+search_term="$1"
+if [[ -z "$search_term" ]]; then
+    read -p "🔍 Search notes content: " search_term
+    [[ -z "$search_term" ]] && exit 0
+fi
+
+# Set up fzf options for search results
+fzf_opts=(
+    --height=80%
+    --layout=reverse
+    --border
+    --prompt="🔍 Search Results > "
+    --header="Enter: Open at line | Ctrl-O: Open file | Ctrl-C: Copy path"
+    --delimiter=":"
+    --bind "enter:execute($NOTES_EDITOR +{2} '{1}')"
+    --bind "ctrl-o:execute($NOTES_EDITOR '{1}')"
+    --bind "ctrl-c:execute-silent(echo {1} | xclip -selection clipboard)"
+    --with-nth=1,3..
+)
+
+# Add preview if enabled
+if [[ "$ENABLE_PREVIEW" == "true" ]] && command -v bat >/dev/null 2>&1; then
+    fzf_opts+=(--preview "bat --color=always --style=header,grid --highlight-line {2} '{1}'" --preview-window "$PREVIEW_SIZE")
+elif [[ "$ENABLE_PREVIEW" == "true" ]]; then
+    fzf_opts+=(--preview "head -n 30 '{1}'" --preview-window "$PREVIEW_SIZE")
+fi
+
+echo "Searching for: '$search_term'"
+echo "Location: $NOTES_DIR"
+echo
+
+# Use ripgrep to search and format results for fzf
+rg --type md \
+   --line-number \
+   --no-heading \
+   --color=never \
+   --smart-case \
+   "$search_term" \
+   "$NOTES_DIR" | \
+   fzf "${fzf_opts[@]}"
+
+# Handle exit codes
+exit_code=$?
+if [[ $exit_code -eq 1 ]]; then
+    # User hit ESC - just exit silently (no "create note" prompt)
+    exit 0
+elif [[ $exit_code -eq 130 ]]; then
+    # User hit Ctrl-C - exit silently
+    exit 0
+elif [[ $exit_code -ne 0 ]]; then
+    # No results found during search
+    echo "No results found for: '$search_term'"
+    echo
+    read -p "Create a new note with this term? (y/N): " create_note
+    if [[ "$create_note" =~ ^[Yy]$ ]]; then
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        BUTTER_ROOT="$(dirname "$SCRIPT_DIR")"
+        exec "$BUTTER_ROOT/bin/quick-note" "$search_term"
+    fi
+fi

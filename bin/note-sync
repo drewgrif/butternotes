@@ -1,0 +1,246 @@
+#!/usr/bin/env bash
+
+# Note sync utility
+# Supports Git and Nextcloud sync methods
+
+set -euo pipefail
+
+# Load configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_DIR="$(dirname "$SCRIPT_DIR")/config"
+
+# Load notes config
+source "$CONFIG_DIR/notes.conf"
+# Load sync config
+source "$CONFIG_DIR/sync.conf"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Notification function
+notify() {
+    local title="$1"
+    local message="$2"
+    local urgency="${3:-normal}"
+    
+    if [[ "$SYNC_NOTIFICATION" == "true" ]] && command -v notify-send &> /dev/null; then
+        notify-send -u "$urgency" "$title" "$message"
+    fi
+    
+    echo -e "${BLUE}[$title]${NC} $message"
+}
+
+# Error handling
+error() {
+    echo -e "${RED}Error:${NC} $1" >&2
+    notify "Sync Error" "$1" "critical"
+    exit 1
+}
+
+# Success message
+success() {
+    echo -e "${GREEN}Success:${NC} $1"
+    notify "Sync Complete" "$1" "normal"
+}
+
+# Check if notes directory exists
+if [[ ! -d "$NOTES_DIR" ]]; then
+    error "Notes directory not found: $NOTES_DIR"
+fi
+
+# Git sync functions
+git_sync() {
+    cd "$NOTES_DIR" || error "Cannot access notes directory"
+    
+    # Initialize git repo if needed
+    if [[ ! -d ".git" ]]; then
+        echo "Initializing git repository..."
+        git init
+        git add .
+        git commit -m "Initial commit" || true
+        
+        if [[ -n "${GIT_REMOTE_URL:-}" ]]; then
+            git remote add origin "$GIT_REMOTE_URL"
+        else
+            echo -e "${YELLOW}Warning:${NC} No git remote configured. Add GIT_REMOTE_URL to sync.conf"
+        fi
+    fi
+    
+    # Check for uncommitted changes
+    if [[ -n $(git status --porcelain) ]]; then
+        if [[ "$GIT_AUTO_COMMIT" == "true" ]]; then
+            git add .
+            git commit -m "$GIT_COMMIT_MSG" || error "Git commit failed"
+            echo "Committed local changes"
+        else
+            error "Uncommitted changes found. Please commit manually or enable GIT_AUTO_COMMIT"
+        fi
+    fi
+    
+    # Pull from remote (if configured)
+    if git remote | grep -q "$GIT_REMOTE"; then
+        echo "Pulling from remote..."
+        if ! git pull "$GIT_REMOTE" "$GIT_BRANCH" --rebase; then
+            # Handle conflicts
+            case "$CONFLICT_STRATEGY" in
+                "local")
+                    git rebase --abort
+                    git pull "$GIT_REMOTE" "$GIT_BRANCH" --strategy=ours
+                    ;;
+                "remote")
+                    git rebase --abort
+                    git pull "$GIT_REMOTE" "$GIT_BRANCH" --strategy=theirs
+                    ;;
+                "backup")
+                    mkdir -p "$BACKUP_DIR"
+                    cp -r "$NOTES_DIR"/* "$BACKUP_DIR/backup-$(date +%Y%m%d-%H%M%S)/"
+                    git rebase --abort
+                    git pull "$GIT_REMOTE" "$GIT_BRANCH" --force
+                    ;;
+                *)
+                    error "Merge conflict detected. Please resolve manually."
+                    ;;
+            esac
+        fi
+        
+        # Push to remote
+        if [[ "$GIT_PUSH_ON_COMMIT" == "true" ]]; then
+            echo "Pushing to remote..."
+            git push "$GIT_REMOTE" "$GIT_BRANCH" || error "Git push failed"
+        fi
+    fi
+    
+    success "Git sync completed"
+}
+
+# Nextcloud sync functions
+nextcloud_sync() {
+    # Check for rclone
+    if ! command -v rclone &> /dev/null; then
+        error "rclone not found. Install with: sudo apt install rclone"
+    fi
+    
+    # Check if Nextcloud is configured
+    if [[ -z "$NEXTCLOUD_URL" ]] || [[ -z "$NEXTCLOUD_USER" ]]; then
+        error "Nextcloud not configured. Please update sync.conf"
+    fi
+    
+    # Configure rclone if needed
+    RCLONE_CONFIG="$HOME/.config/rclone/rclone.conf"
+    RCLONE_REMOTE="butternotes-nextcloud"
+    
+    if ! rclone listremotes | grep -q "$RCLONE_REMOTE:"; then
+        echo "Configuring rclone for Nextcloud..."
+        mkdir -p "$(dirname "$RCLONE_CONFIG")"
+        
+        # Create rclone config
+        cat >> "$RCLONE_CONFIG" <<EOF
+
+[$RCLONE_REMOTE]
+type = webdav
+url = $NEXTCLOUD_URL/remote.php/dav/files/$NEXTCLOUD_USER
+vendor = nextcloud
+user = $NEXTCLOUD_USER
+pass = $(rclone obscure "$NEXTCLOUD_PASS")
+EOF
+    fi
+    
+    # Perform sync
+    echo "Syncing with Nextcloud..."
+    
+    # Bidirectional sync with conflict detection
+    rclone bisync "$NOTES_DIR" "$RCLONE_REMOTE:$NEXTCLOUD_PATH" \
+        --create-empty-src-dirs \
+        --compare size,modtime \
+        --conflict-resolve "$CONFLICT_STRATEGY" \
+        --conflict-suffix "-conflict-$(date +%Y%m%d)" \
+        --resilient \
+        --recover \
+        --verbose \
+        || error "Nextcloud sync failed"
+    
+    success "Nextcloud sync completed"
+}
+
+# Main sync function
+sync_notes() {
+    case "$SYNC_METHOD" in
+        "git")
+            git_sync
+            ;;
+        "nextcloud")
+            nextcloud_sync
+            ;;
+        "none")
+            echo "Sync disabled. Configure SYNC_METHOD in sync.conf"
+            ;;
+        *)
+            error "Unknown sync method: $SYNC_METHOD"
+            ;;
+    esac
+}
+
+# Handle command line arguments
+case "${1:-sync}" in
+    "sync")
+        sync_notes
+        ;;
+    "setup")
+        echo "Setting up sync..."
+        case "${2:-}" in
+            "git")
+                read -p "Git remote URL: " GIT_REMOTE_URL
+                sed -i "s|SYNC_METHOD=.*|SYNC_METHOD=\"git\"|" "$CONFIG_DIR/sync.conf"
+                echo "GIT_REMOTE_URL=\"$GIT_REMOTE_URL\"" >> "$CONFIG_DIR/sync.conf"
+                cd "$NOTES_DIR" && git init && git remote add origin "$GIT_REMOTE_URL"
+                success "Git sync configured"
+                ;;
+            "nextcloud")
+                read -p "Nextcloud URL: " NEXTCLOUD_URL
+                read -p "Username: " NEXTCLOUD_USER
+                read -sp "Password: " NEXTCLOUD_PASS
+                echo
+                sed -i "s|SYNC_METHOD=.*|SYNC_METHOD=\"nextcloud\"|" "$CONFIG_DIR/sync.conf"
+                sed -i "s|NEXTCLOUD_URL=.*|NEXTCLOUD_URL=\"$NEXTCLOUD_URL\"|" "$CONFIG_DIR/sync.conf"
+                sed -i "s|NEXTCLOUD_USER=.*|NEXTCLOUD_USER=\"$NEXTCLOUD_USER\"|" "$CONFIG_DIR/sync.conf"
+                sed -i "s|NEXTCLOUD_PASS=.*|NEXTCLOUD_PASS=\"$NEXTCLOUD_PASS\"|" "$CONFIG_DIR/sync.conf"
+                success "Nextcloud sync configured"
+                ;;
+            *)
+                echo "Usage: $0 setup [git|nextcloud]"
+                ;;
+        esac
+        ;;
+    "status")
+        echo "Sync method: $SYNC_METHOD"
+        case "$SYNC_METHOD" in
+            "git")
+                cd "$NOTES_DIR" && git status
+                ;;
+            "nextcloud")
+                echo "Nextcloud URL: $NEXTCLOUD_URL"
+                echo "Remote path: $NEXTCLOUD_PATH"
+                ;;
+        esac
+        ;;
+    "auto")
+        # Auto sync daemon mode
+        echo "Starting auto-sync daemon (interval: ${SYNC_INTERVAL}s)..."
+        while true; do
+            sync_notes
+            sleep "$SYNC_INTERVAL"
+        done
+        ;;
+    *)
+        echo "Usage: $0 [sync|setup|status|auto]"
+        echo "  sync   - Perform one-time sync"
+        echo "  setup  - Configure sync method"
+        echo "  status - Show sync status"
+        echo "  auto   - Run auto-sync daemon"
+        exit 1
+        ;;
+esac

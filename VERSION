@@ -1,0 +1,30 @@
+ButterNotes v1.1 - "Project Perfection"
+🧈 The definitive suckless note-taking experience
+
+Features:
+- Lightning-fast fzf file browser with grouped display
+- Project organization through subdirectories  
+- Content search with exact line navigation
+- Seamless workflow: browse → search → edit → repeat
+- Clean exits, no friction, pure keyboard-driven
+- Template system for quick note creation
+- File moving between projects
+- Integrates perfectly with nvim markdown rendering
+
+Workflow:
+- notes: Browse all notes (grouped by project)
+- Ctrl-S: Search content → select → jumps to exact line
+- Ctrl-N: Create new note
+- Ctrl-M: Move note between projects
+- ESC: Clean exit at any point
+
+Essential keybinds only:
+- Enter: Open
+- Ctrl-N: New  
+- Ctrl-D: Delete
+- Ctrl-S: Search
+- Ctrl-M: Move
+
+Zero redundancy. Maximum efficiency. Pure suckless.
+
+Backup: ButterNotes-v1-FINAL-20250616-135826.tar.gz

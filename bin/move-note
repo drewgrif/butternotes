@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# Move a note to a different directory/project
+# Usage: move-note filepath
+
+source_file="$1"
+[[ ! -f "$source_file" ]] && exit 1
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUTTER_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Load configuration
+source "$BUTTER_ROOT/config/notes.conf" 2>/dev/null || {
+    NOTES_DIR="$HOME/notes"
+    NOTES_EXT="md"
+}
+
+# Get available directories
+dirs=$(find "$NOTES_DIR" -mindepth 1 -type d | sed "s|$NOTES_DIR/||" | sort)
+
+# Add option for root and new directory
+selected=$(
+{
+    echo "root"
+    echo "$dirs"
+    echo "── CREATE NEW PROJECT ──"
+} | fzf --prompt="📁 Move to project: " --height=50% --border
+)
+
+# Handle selection
+if [[ $? -eq 0 && -n "$selected" ]]; then
+    if [[ "$selected" == "── CREATE NEW PROJECT ──" ]]; then
+        read -p "New project name: " new_project
+        target_dir="$NOTES_DIR/$new_project"
+        mkdir -p "$target_dir"
+        project_name="$new_project"
+    elif [[ "$selected" == "root" ]]; then
+        target_dir="$NOTES_DIR"
+        project_name="root"
+    else
+        target_dir="$NOTES_DIR/$selected"
+        project_name="$selected"
+    fi
+    
+    # Move the file
+    filename=$(basename "$source_file")
+    mv "$source_file" "$target_dir/$filename"
+    echo "Moved $(basename "$source_file") to $project_name"
+fi

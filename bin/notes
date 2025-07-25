@@ -1,0 +1,89 @@
+#!/bin/bash
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUTTER_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Load configuration
+source "$BUTTER_ROOT/config/notes.conf" 2>/dev/null || {
+    NOTES_DIR="$HOME/notes"
+    NOTES_EDITOR="nvim"
+    NOTES_EXT="md"
+    ENABLE_PREVIEW=true
+    PREVIEW_SIZE="50%"
+}
+
+mkdir -p "$NOTES_DIR"
+
+# Handle --list-only for reloads
+[[ "$1" == "--list-only" ]] && {
+    find "$NOTES_DIR" -name "*.$NOTES_EXT" -type f | \
+    sed "s|$NOTES_DIR/||" | \
+    awk -F/ '{print NF, $0}' | \
+    sort -k1,1n -k2,2 | \
+    awk '{print $2}' | \
+    sed "s|^|$NOTES_DIR/|"
+    exit 0
+}
+
+# fzf options
+fzf_opts=(
+    --height=80% --layout=reverse --border --prompt="📝 Notes > " --info=hidden
+    --bind "ctrl-n:execute($BUTTER_ROOT/bin/quick-note)+reload($BUTTER_ROOT/bin/notes --list-only)"
+    --bind "ctrl-d:execute-silent(rm '{2}')+reload($BUTTER_ROOT/bin/notes --list-only)"
+    --bind "ctrl-x:execute($BUTTER_ROOT/bin/move-note '{2}')+reload($BUTTER_ROOT/bin/notes --list-only)"
+    --bind "ctrl-s:execute($BUTTER_ROOT/bin/note-search)"
+    --bind "ctrl-y:execute($BUTTER_ROOT/bin/note-sync sync)+reload($BUTTER_ROOT/bin/notes --list-only)"
+    --bind "enter:execute($NOTES_EDITOR '{2}')"
+)
+
+# Add preview
+[[ "$ENABLE_PREVIEW" == "true" ]] && command -v bat >/dev/null 2>&1 && 
+    fzf_opts+=(--preview "bat --color=always --style=header,grid --line-range :50 '{2}'" --preview-window "$PREVIEW_SIZE")
+[[ "$ENABLE_PREVIEW" == "true" ]] && ! command -v bat >/dev/null 2>&1 &&
+    fzf_opts+=(--preview "head -n 30 '{2}'" --preview-window "$PREVIEW_SIZE")
+
+echo
+echo "📝 ButterNotes"
+echo "Enter: Open  │  Ctrl-N: New  │  Ctrl-D: Del  │  Ctrl-X: Move  │  Ctrl-S: Search  │  Ctrl-Y: Sync"
+echo "Tip: Use Ctrl-X to organize notes into folders (create your own categories)"
+
+# Format file list with colors and tab delimiter
+format_files() {
+    while IFS= read -r file; do
+        rel_path="${file#$NOTES_DIR/}"
+        
+        if [[ "$rel_path" == */* ]]; then
+            # Split directory path and filename
+            dir_part="${rel_path%/*}"
+            file_part="${rel_path##*/}"
+            # Replace all / with > and color each directory part
+            colored_dirs="${dir_part//\// > }"
+            # Format: colored_display TAB file_path
+            printf "\033[36m%s\033[0m > %s\t%s\n" "$colored_dirs" "$file_part" "$file"
+        else
+            # Root files: plain_display TAB file_path  
+            printf "%s\t%s\n" "$rel_path" "$file"
+        fi
+    done
+}
+
+# Start fzf
+find "$NOTES_DIR" -name "*.$NOTES_EXT" -type f | \
+sed "s|$NOTES_DIR/||" | \
+awk -F/ '{
+    if (NF == 1) {
+        print "1 " $0
+    } else {
+        dir = $1
+        for (i = 2; i < NF; i++) {
+            dir = dir "/" $i
+        }
+        print dir " " NF " " $0
+    }
+}' | \
+sort -k1,1 -k2,2n -k3,3 | \
+awk '{print $NF}' | \
+sed "s|^|$NOTES_DIR/|" | \
+format_files | \
+fzf "${fzf_opts[@]}" --ansi --delimiter='\t' --with-nth=1 "$@"
