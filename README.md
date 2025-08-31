@@ -1,5 +1,6 @@
 # 🧈 ButterNotes
 
+![Made for Debian](https://img.shields.io/badge/Made_for-Debian-A81D33?style=for-the-badge)
 ![Made for Linux](https://img.shields.io/badge/Made_for-Linux-FCC624?style=for-the-badge)
 ![Terminal Based](https://img.shields.io/badge/Terminal-Based-4EAA25?style=for-the-badge)
 
