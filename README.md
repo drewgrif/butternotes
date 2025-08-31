@@ -1,7 +1,6 @@
 # 🧈 ButterNotes
 
-![Made for Linux](https://img.shields.io/badge/Made%20for-Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
-![Terminal Based](https://img.shields.io/badge/Terminal-Based-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white)
+![Made for Linux](https://img.shields.io/badge/Made%20for-Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black) ![Terminal Based](https://img.shields.io/badge/Terminal-Based-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white)
 
 A streamlined note-taking and todo management system for the terminal.  
 Following the "inbox first, organize later" philosophy with smart fzf-enhanced project management.
