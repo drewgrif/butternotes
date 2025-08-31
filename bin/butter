@@ -1,0 +1,318 @@
+#!/bin/bash
+
+# Butter - Simplified note and todo management (no rofi)
+# Terminal-only version with clean sub-prompts
+
+BUTTER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BUTTER_LIB="$BUTTER_DIR/lib"
+BUTTER_BIN="$BUTTER_DIR/bin"
+
+# Source the core functions
+source "$BUTTER_LIB/note.bash"
+source "$BUTTER_LIB/todo.bash"
+
+# Show help
+show_help() {
+    cat << EOF
+🧈 Butter - Smart note and todo management
+
+Usage: butter [COMMAND] [ARGS...]
+
+Commands:
+  add TEXT           Add a note with TEXT
+  clip              Save clipboard content as note
+  todo TEXT         Add a todo item
+  todos             List all todos
+  search [TERM]     Search notes
+  list              List all notes
+  edit              Open notes file in editor
+  help              Show this help
+  
+Quick Usage:
+  butter "Quick note"           # Add note
+  butter todo "Fix bug"         # Add todo
+  butter clip                   # Save clipboard
+  butter                        # Interactive mode
+
+Examples:
+  # Add to your ~/.bashrc or ~/.config/bash/aliases
+  alias b='butter'
+  alias bc='butter clip'
+  alias bt='butter todo'
+
+Note: When called without arguments, butter enters interactive mode.
+EOF
+}
+
+# Note sub-prompt
+note_prompt() {
+    # Disable alias expansion in this subshell
+    set +o posix 2>/dev/null
+    
+    echo "📝 Notes Mode"
+    echo "Commands: a(dd), l(ist), e(dit), rm, c(lip), s(earch), h(elp), .. (back)"
+    echo
+    
+    while true; do
+        read -r -p "butter/notes> " input
+        
+        # Split input into command and args
+        cmd="${input%% *}"
+        args="${input#* }"
+        [ "$cmd" = "$args" ] && args=""
+        
+        case "$cmd" in
+            a|add)
+                if [ -n "$args" ]; then
+                    note "$args"
+                else
+                    read -r -p "Note text: " text
+                    [ -n "$text" ] && note "$text"
+                fi
+                ;;
+            l|ls|list)
+                note
+                ;;
+            e|edit)
+                note edit
+                ;;
+            rm|r|del)
+                if [ -n "$args" ]; then
+                    note rm $args
+                else
+                    echo "Usage: rm <note_numbers>"
+                    echo "Examples: rm 3  |  rm 1-5  |  rm 1 3 5"
+                fi
+                ;;
+            clear)
+                note clear
+                ;;
+            c|clip)
+                note clip
+                ;;
+            s|search|/)
+                if [ -n "$args" ]; then
+                    grep -i "$args" "${NOTES_FILE:-$HOME/Documents/ButterNotes/notes.md}" 2>/dev/null || echo "No matches found"
+                else
+                    read -r -p "Search for: " term
+                    [ -n "$term" ] && grep -i "$term" "${NOTES_FILE:-$HOME/Documents/ButterNotes/notes.md}" 2>/dev/null || echo "No matches found"
+                fi
+                ;;
+            h|help|?)
+                echo "Notes Commands:"
+                echo "  a       - Add a new note (or just type text)"
+                echo "  l       - List all notes"
+                echo "  e       - Edit notes file"
+                echo "  rm <n>  - Remove note(s)"
+                echo "  c       - Save clipboard"
+                echo "  s or /  - Search notes"
+                echo "  clear   - Delete all notes"
+                echo "  ..      - Back to main menu (or type 'exit')"
+                ;;
+            ..|back|exit|quit)
+                break
+                ;;
+            "")
+                continue
+                ;;
+            *)
+                # If no command matched, treat it as adding a note
+                note "$cmd $args"
+                ;;
+        esac
+        echo
+    done
+}
+
+# Todo sub-prompt
+todo_prompt() {
+    # Disable alias expansion in this subshell
+    set +o posix 2>/dev/null
+    
+    echo "✅ Todo Mode"
+    echo "Commands: a(dd), l(ist), d(one) <n>, rm <n>, h(elp), .. (back)"
+    echo
+    
+    while true; do
+        read -r -p "butter/todos> " input
+        
+        # Split input into command and args
+        cmd="${input%% *}"
+        args="${input#* }"
+        [ "$cmd" = "$args" ] && args=""
+        
+        case "$cmd" in
+            a|add)
+                if [ -n "$args" ]; then
+                    todo add "$args"
+                else
+                    read -r -p "Todo text: " text
+                    [ -n "$text" ] && todo add "$text"
+                fi
+                ;;
+            l|ls|list)
+                todo
+                ;;
+            d|done|toggle)
+                if [ -n "$args" ]; then
+                    todo done $args
+                else
+                    echo "Usage: d <todo_number>"
+                fi
+                ;;
+            rm|r|del)
+                if [ -n "$args" ]; then
+                    todo rm $args
+                else
+                    echo "Usage: rm <todo_numbers>"
+                fi
+                ;;
+            clear)
+                todo clear
+                ;;
+            h|help|?)
+                echo "Todo Commands:"
+                echo "  a       - Add a new todo (or just type text)"
+                echo "  l       - List all todos"
+                echo "  d <n>   - Toggle todo done/undone"
+                echo "  rm <n>  - Remove todo(s)"
+                echo "  clear   - Delete all todos"
+                echo "  ..      - Back to main menu (or type 'exit')"
+                ;;
+            ..|back|exit|quit)
+                break
+                ;;
+            "")
+                continue
+                ;;
+            *)
+                # If no command matched, treat it as adding a todo
+                todo add "$cmd $args"
+                ;;
+        esac
+        echo
+    done
+}
+
+# Interactive terminal mode
+interactive_terminal() {
+    echo "🧈 Butter - Interactive Mode"
+    echo
+    echo "Commands:"
+    echo "  n         - Enter notes mode"
+    echo "  t         - Enter todos mode"
+    echo "  l         - Quick list notes"
+    echo "  lt        - Quick list todos"
+    echo "  q         - Quit"
+    echo
+    
+    while true; do
+        read -r -p "butter> " input
+        
+        # Split input into command and args
+        cmd="${input%% *}"
+        args="${input#* }"
+        [ "$cmd" = "$args" ] && args=""
+        
+        case "$cmd" in
+            n|note|notes)
+                note_prompt
+                echo "🧈 Butter - Main Menu"
+                echo "Commands: n (notes), t (todos), l (list notes), lt (list todos), q (quit)"
+                ;;
+            t|todo|todos)
+                todo_prompt
+                echo "🧈 Butter - Main Menu"
+                echo "Commands: n (notes), t (todos), l (list notes), lt (list todos), q (quit)"
+                ;;
+            l|list)
+                note
+                ;;
+            lt)
+                todo
+                ;;
+            q|quit|exit)
+                break
+                ;;
+            help|h|?)
+                echo "Commands: n (notes), t (todos), l (list notes), lt (list todos), q (quit)"
+                ;;
+            "")
+                continue
+                ;;
+            *)
+                echo "Unknown command: $cmd. Type 'help' for commands."
+                ;;
+        esac
+        echo
+    done
+}
+
+# Main execution
+main() {
+    # Terminal mode handling
+    case "${1:-}" in
+        add)
+            shift
+            if [ -n "$*" ]; then
+                note "$*"
+            else
+                echo "Usage: butter add <text>"
+                exit 1
+            fi
+            ;;
+        clip|clipboard)
+            note clip
+            ;;
+        todo)
+            shift
+            if [ -n "$*" ]; then
+                todo add "$*"
+            else
+                todo
+            fi
+            ;;
+        todos)
+            todo
+            ;;
+        search)
+            shift
+            if [ -n "$*" ]; then
+                grep -i "$*" "${NOTES_FILE:-$HOME/Documents/ButterNotes/notes.md}" 2>/dev/null || echo "No matches found"
+            else
+                # Interactive search with fzf if available
+                if command -v fzf >/dev/null 2>&1 && [ -f "${NOTES_FILE:-$HOME/Documents/ButterNotes/notes.md}" ]; then
+                    note | fzf --preview 'echo {}' --height=50% --layout=reverse
+                else
+                    echo "Enter search term (or install fzf for interactive search):"
+                    read -r term
+                    [ -n "$term" ] && grep -i "$term" "${NOTES_FILE:-$HOME/Documents/ButterNotes/notes.md}" 2>/dev/null || echo "No matches found"
+                fi
+            fi
+            ;;
+        list|ls)
+            note
+            ;;
+        edit)
+            note edit
+            ;;
+        help|--help|-h)
+            show_help
+            ;;
+        "")
+            # No arguments - interactive mode
+            if [ -t 0 ] && [ -t 1 ]; then
+                interactive_terminal
+            else
+                show_help
+            fi
+            ;;
+        *)
+            # Default: treat as a note
+            note "$*"
+            ;;
+    esac
+}
+
+# Run main function
+main "$@"
