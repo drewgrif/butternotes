@@ -522,6 +522,7 @@ interactive_terminal() {
     echo "  p         - Enter projects mode"
     echo "  l         - Quick list notes"
     echo "  lt        - Quick list todos"
+    echo "  c         - Clear screen"
     echo "  q         - Quit"
     echo
     
@@ -535,14 +536,10 @@ interactive_terminal() {
         
         case "$cmd" in
             n|note|notes)
-                note_prompt
-                echo "🧈 Butter - Main Menu"
-                echo "Commands: n (notes), t (todos), l (list notes), lt (list todos), q (quit)"
+                notes_prompt
                 ;;
             t|todo|todos)
-                todo_prompt
-                echo "🧈 Butter - Main Menu"
-                echo "Commands: n (notes), t (todos), l (list notes), lt (list todos), q (quit)"
+                todos_prompt
                 ;;
             l|list)
                 note
@@ -592,11 +589,25 @@ interactive_terminal() {
                     esac
                 done
                 ;;
+            c|clear|cls)
+                clear
+                echo "🧈 Butter - Interactive Mode"
+                echo
+                echo "Commands:"
+                echo "  n         - Enter notes mode"
+                echo "  t         - Enter todos mode"
+                echo "  p         - Enter projects mode"
+                echo "  l         - Quick list notes"
+                echo "  lt        - Quick list todos"
+                echo "  c         - Clear screen"
+                echo "  q         - Quit"
+                echo
+                ;;
             q|quit|exit)
                 break
                 ;;
             help|h|?)
-                echo "Commands: n (notes), t (todos), p (projects), l (list notes), lt (list todos), q (quit)"
+                echo "Commands: n (notes), t (todos), p (projects), l (list notes), lt (list todos), c (clear), q (quit)"
                 ;;
             "")
                 continue

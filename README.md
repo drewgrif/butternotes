@@ -100,6 +100,7 @@ Commands:
   t    - Todo mode             (task management)  
   p    - Projects mode         (fzf manager)
   l    - List notes
+  c    - Clear screen
   q    - Quit
 
 butter> p                     # Opens fzf project manager
