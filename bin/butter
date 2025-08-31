@@ -11,6 +11,77 @@ BUTTER_BIN="$BUTTER_DIR/bin"
 source "$BUTTER_LIB/note.bash"
 source "$BUTTER_LIB/todo.bash"
 
+# FZF integration functions
+select_project() {
+    # Source config to get BUTTER_NOTES_DIR
+    [ -f "$BUTTER_DIR/config/butter.conf" ] && source "$BUTTER_DIR/config/butter.conf"
+    
+    local projects_dir="${BUTTER_NOTES_DIR:-$HOME/Documents/ButterNotes}/projects"
+    
+    if [ ! -d "$projects_dir" ] || [ -z "$(ls -A "$projects_dir" 2>/dev/null)" ]; then
+        echo "No projects found. Create one with: butter project <name> \"your note\"" >&2
+        return 1
+    fi
+    
+    if command -v fzf >/dev/null 2>&1; then
+        # Combine projects with management actions
+        {
+            echo "📝 New project"
+            echo "🗑️  Delete project"
+            echo "🚪 Exit"
+            echo "───────────────"
+            find "$projects_dir" -name "*.md" -exec basename {} .md \; 2>/dev/null | sort
+        } | fzf --prompt="Project Manager: " \
+                --bind='ctrl-n:execute(echo "📝 New project")+accept' \
+                --bind='ctrl-d:execute(echo "🗑️  Delete project")+accept' \
+                --bind='tab:toggle-preview' \
+                --header='Enter: Edit • Ctrl-N: New • Ctrl-D: Delete • Tab: Toggle Preview' \
+                --preview="
+                    if [[ {} == '📝 New project' ]]; then
+                        echo 'Create a new project'
+                    elif [[ {} == '🗑️  Delete project' ]]; then
+                        echo 'Delete an existing project'
+                    elif [[ {} == '🚪 Exit' ]]; then
+                        echo 'Exit project manager'
+                    elif [[ {} == '───────────────' ]]; then
+                        echo 'Select a project below to edit'
+                    else
+                        cat '$projects_dir/{}.md' 2>/dev/null || echo 'Empty project'
+                    fi
+                " \
+                --preview-window=right:50% \
+                --height=40%
+    else
+        # Fallback to simple numbered list
+        echo "Project Manager:" >&2
+        echo "  1) 📝 New project" >&2
+        echo "  2) 🗑️  Delete project" >&2
+        echo "  3) 🚪 Exit" >&2
+        echo "  ───────────────" >&2
+        
+        local i=4
+        local projects=()
+        projects[1]="📝 New project"
+        projects[2]="🗑️  Delete project"
+        projects[3]="🚪 Exit"
+        
+        while IFS= read -r -d '' project_file; do
+            local project_name=$(basename "$project_file" .md)
+            echo "  $i) $project_name" >&2
+            projects[$i]="$project_name"
+            ((i++))
+        done < <(find "$projects_dir" -name "*.md" -print0 2>/dev/null)
+        
+        read -p "Choose option [1-$((i-1))]: " choice >&2
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -lt "$i" ]; then
+            echo "${projects[$choice]}"
+        else
+            echo "" # Invalid choice
+        fi
+    fi
+}
+
+
 # Show help
 show_help() {
     cat << EOF
@@ -21,16 +92,25 @@ Usage: butter [COMMAND] [ARGS...]
 Commands:
   add TEXT           Add a note with TEXT
   clip              Save clipboard content as note
+  notes edit         Edit notes file (shortcut: n edit)
+  notes rm           Clear all notes (shortcut: n rm)
   todo TEXT         Add a todo item
   todos             List all todos
-  search [TERM]     Search notes
+  project NAME      View project notes (shortcut: p NAME)
+  project NAME edit Edit project file (shortcut: p NAME edit)  
+  project           Project manager - select/create/delete (shortcut: p)
+  projects          List all projects
+  search [TERM]     Search notes (interactive if no term given)
   list              List all notes
-  edit              Open notes file in editor
+  edit              Open notes file in editor (legacy)
   help              Show this help
   
 Quick Usage:
   butter "Quick note"           # Add note
   butter todo "Fix bug"         # Add todo
+  butter project python        # View python project notes
+  butter project               # Project manager (fzf)
+  butter search                 # Interactive note search (fzf)
   butter clip                   # Save clipboard
   butter                        # Interactive mode
 
@@ -194,6 +274,244 @@ todo_prompt() {
     done
 }
 
+# Notes command handler
+notes_command() {
+    local command="$1"
+    shift
+    
+    # Source config to get BUTTER_NOTES_DIR
+    [ -f "$BUTTER_DIR/config/butter.conf" ] && source "$BUTTER_DIR/config/butter.conf"
+    
+    local notes_file="${NOTES_FILE:-$HOME/Documents/ButterNotes/notes.md}"
+    
+    case "$command" in
+        edit|e)
+            ${BUTTER_EDITOR:-${EDITOR:-nano}} "$notes_file"
+            ;;
+        rm|remove|delete)
+            if [ -f "$notes_file" ]; then
+                echo -n "⚠️  Delete all notes? (y/N): "
+                read -r confirm
+                if [[ "$confirm" =~ ^[yY]$ ]]; then
+                    > "$notes_file"
+                    echo "🗑️  All notes cleared"
+                else
+                    echo "Cancelled"
+                fi
+            else
+                echo "📝 No notes file exists yet."
+            fi
+            ;;
+        list|l|ls|"")
+            note
+            ;;
+        *)
+            # Treat as note text to add
+            note "$command $*"
+            ;;
+    esac
+}
+
+# Project note functions
+project_note() {
+    local project_name="$1"
+    shift
+    local command_or_text="$1"
+    
+    # Source config to get BUTTER_NOTES_DIR
+    [ -f "$BUTTER_DIR/config/butter.conf" ] && source "$BUTTER_DIR/config/butter.conf"
+    
+    local projects_dir="${BUTTER_NOTES_DIR:-$HOME/Documents/ButterNotes}/projects"
+    local project_file="$projects_dir/${project_name}.md"
+    
+    # Create projects directory if it doesn't exist
+    mkdir -p "$projects_dir"
+    
+    # Check for edit or rm commands
+    if [ "$command_or_text" = "edit" ]; then
+        if [ -f "$project_file" ]; then
+            ${BUTTER_EDITOR:-${EDITOR:-nano}} "$project_file"
+        else
+            echo "📁 Project '$project_name' doesn't exist yet."
+            echo "Create it with: butter project $project_name \"your note\""
+        fi
+        return
+    elif [ "$command_or_text" = "rm" ] || [ "$command_or_text" = "delete" ]; then
+        if [ -f "$project_file" ]; then
+            echo -n "⚠️  Delete project '$project_name' and all its notes? (y/N): "
+            read -r confirm
+            if [[ "$confirm" =~ ^[yY]$ ]]; then
+                rm "$project_file"
+                echo "🗑️  Project '$project_name' deleted"
+            else
+                echo "Cancelled"
+            fi
+        else
+            echo "📁 Project '$project_name' doesn't exist."
+        fi
+        return
+    fi
+    
+    local text="$command_or_text"
+    shift
+    [ -n "$*" ] && text="$text $*"
+    
+    if [ -z "$text" ]; then
+        # No text provided - list notes for this project
+        if [ -f "$project_file" ]; then
+            echo "📁 Project: $project_name"
+            local count=1
+            local in_note=false
+            local note_content=""
+            
+            while IFS= read -r line; do
+                # Check if line starts with timestamp pattern
+                if [[ "$line" =~ ^\[([0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2})\] ]]; then
+                    # If we were already in a note, print it
+                    if [ "$in_note" = true ] && [ -n "$note_content" ]; then
+                        echo -e "  \033[1;33m[$count]\033[0m $note_content"
+                        ((count++))
+                    fi
+                    # Start new note
+                    note_content="$line"
+                    in_note=true
+                elif [ "$in_note" = true ]; then
+                    # Continue current note (multi-line)
+                    if [ -n "$line" ]; then
+                        note_content="$note_content\n    $line"
+                    fi
+                fi
+            done < "$project_file"
+            
+            # Print last note if exists
+            if [ "$in_note" = true ] && [ -n "$note_content" ]; then
+                echo -e "  \033[1;33m[$count]\033[0m $note_content"
+            fi
+        else
+            echo "📁 Project '$project_name' has no notes yet."
+            echo "Add a note with: butter project $project_name \"your note\""
+        fi
+    else
+        # Add text to project
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $text" >> "$project_file"
+        echo "✅ Note added to project '$project_name'"
+    fi
+}
+
+list_projects() {
+    # Source config to get BUTTER_NOTES_DIR
+    [ -f "$BUTTER_DIR/config/butter.conf" ] && source "$BUTTER_DIR/config/butter.conf"
+    
+    local projects_dir="${BUTTER_NOTES_DIR:-$HOME/Documents/ButterNotes}/projects"
+    
+    if [ -d "$projects_dir" ] && [ -n "$(ls -A "$projects_dir" 2>/dev/null)" ]; then
+        echo "📁 Projects:"
+        for project_file in "$projects_dir"/*.md; do
+            if [ -f "$project_file" ]; then
+                local project_name=$(basename "$project_file" .md)
+                local note_count=$(grep -c "^\[" "$project_file" 2>/dev/null || echo "0")
+                echo "  $project_name ($note_count notes)"
+            fi
+        done
+    else
+        echo "📁 No projects yet."
+        echo "Create one with: butter project <name> \"your note\""
+    fi
+}
+
+# Project sub-prompt
+projects_prompt() {
+    # Disable alias expansion in this subshell
+    set +o posix 2>/dev/null
+    
+    echo "📁 Projects Mode"
+    echo "Commands: <project> \"text\", <project> e(dit), <project> rm, l(ist), h(elp), .. (back)"
+    echo
+    
+    while true; do
+        read -r -p "butter/projects> " input
+        
+        # Split input into command and args
+        cmd="${input%% *}"
+        args="${input#* }"
+        [ "$cmd" = "$args" ] && args=""
+        
+        case "$cmd" in
+            list|l|ls)
+                # Project manager
+                selection=$(select_project)
+                if [ -n "$selection" ]; then
+                    case "$selection" in
+                        "📝 New project")
+                            read -p "New project name: " new_name
+                            if [ -n "$new_name" ]; then
+                                project_note "$new_name" "edit"
+                            fi
+                            ;;
+                        "🗑️  Delete project")
+                            # Source config to get BUTTER_NOTES_DIR
+                            [ -f "$BUTTER_DIR/config/butter.conf" ] && source "$BUTTER_DIR/config/butter.conf"
+                            projects_dir="${BUTTER_NOTES_DIR:-$HOME/Documents/ButterNotes}/projects"
+                            
+                            if command -v fzf >/dev/null 2>&1 && [ -t 0 ] && [ -t 1 ]; then
+                                del_project=$(find "$projects_dir" -name "*.md" -exec basename {} .md \; 2>/dev/null | sort | fzf --prompt="Delete project: ")
+                                if [ -n "$del_project" ]; then
+                                    project_note "$del_project" "rm"
+                                fi
+                            fi
+                            ;;
+                        "───────────────")
+                            # Separator, ignore
+                            ;;
+                        *)
+                            # Regular project name - edit it
+                            project_note "$selection" "edit"
+                            ;;
+                    esac
+                fi
+                ;;
+            h|help|?)
+                echo "Projects Commands:"
+                echo "  l               - Project manager (new/edit/delete)"  
+                echo "  <project>       - View notes for project"
+                echo "  <project> e     - Edit project file"
+                echo "  <project> rm    - Delete project"
+                echo "  ..              - Back to main menu"
+                ;;
+            ..|back|exit|quit)
+                break
+                ;;
+            "")
+                continue
+                ;;
+            *)
+                # Handle project commands
+                if [ -n "$args" ]; then
+                    # Check for single-letter shortcuts  
+                    first_arg="${args%% *}"
+                    
+                    case "$first_arg" in
+                        e|edit)
+                            project_note "$cmd" edit
+                            ;;
+                        rm|r|delete)
+                            project_note "$cmd" rm
+                            ;;
+                        *)
+                            # Unknown argument
+                            echo "Unknown command. Use: $cmd e (edit) or $cmd rm (delete)"
+                            ;;
+                    esac
+                else
+                    # No arguments - show project notes
+                    project_note "$cmd"
+                fi
+                ;;
+        esac
+        echo
+    done
+}
+
 # Interactive terminal mode
 interactive_terminal() {
     echo "🧈 Butter - Interactive Mode"
@@ -201,6 +519,7 @@ interactive_terminal() {
     echo "Commands:"
     echo "  n         - Enter notes mode"
     echo "  t         - Enter todos mode"
+    echo "  p         - Enter projects mode"
     echo "  l         - Quick list notes"
     echo "  lt        - Quick list todos"
     echo "  q         - Quit"
@@ -231,11 +550,53 @@ interactive_terminal() {
             lt)
                 todo
                 ;;
+            p|project|projects)
+                # Launch fzf project manager - loop until exit
+                while true; do
+                    selection=$(select_project)
+                    if [ -z "$selection" ]; then
+                        # User cancelled (Escape) - exit project mode
+                        break
+                    fi
+                    
+                    case "$selection" in
+                        "📝 New project")
+                            read -p "New project name: " new_name
+                            if [ -n "$new_name" ]; then
+                                project_note "$new_name" "edit"
+                            fi
+                            ;;
+                        "🗑️  Delete project")
+                            # Source config to get BUTTER_NOTES_DIR
+                            [ -f "$BUTTER_DIR/config/butter.conf" ] && source "$BUTTER_DIR/config/butter.conf"
+                            projects_dir="${BUTTER_NOTES_DIR:-$HOME/Documents/ButterNotes}/projects"
+                            
+                            if command -v fzf >/dev/null 2>&1; then
+                                del_project=$(find "$projects_dir" -name "*.md" -exec basename {} .md \; 2>/dev/null | sort | fzf --prompt="Delete project: ")
+                                if [ -n "$del_project" ]; then
+                                    project_note "$del_project" "rm"
+                                fi
+                            fi
+                            ;;
+                        "🚪 Exit")
+                            # Exit project mode
+                            break
+                            ;;
+                        "───────────────")
+                            # Separator, ignore - continue loop
+                            ;;
+                        *)
+                            # Regular project name - edit it
+                            project_note "$selection" "edit"
+                            ;;
+                    esac
+                done
+                ;;
             q|quit|exit)
                 break
                 ;;
             help|h|?)
-                echo "Commands: n (notes), t (todos), l (list notes), lt (list todos), q (quit)"
+                echo "Commands: n (notes), t (todos), p (projects), l (list notes), lt (list todos), q (quit)"
                 ;;
             "")
                 continue
@@ -275,13 +636,61 @@ main() {
         todos)
             todo
             ;;
+        project|projects)
+            shift
+            if [ "$1" = "list" ]; then
+                list_projects
+            elif [ -z "$1" ]; then
+                # Interactive project manager
+                selection=$(select_project)
+                if [ -n "$selection" ]; then
+                    case "$selection" in
+                        "📝 New project")
+                            read -p "New project name: " new_name
+                            if [ -n "$new_name" ]; then
+                                project_note "$new_name" "edit"
+                            fi
+                            ;;
+                        "🗑️  Delete project")
+                            # Source config to get BUTTER_NOTES_DIR
+                            [ -f "$BUTTER_DIR/config/butter.conf" ] && source "$BUTTER_DIR/config/butter.conf"
+                            projects_dir="${BUTTER_NOTES_DIR:-$HOME/Documents/ButterNotes}/projects"
+                            
+                            if command -v fzf >/dev/null 2>&1 && [ -t 0 ] && [ -t 1 ]; then
+                                del_project=$(find "$projects_dir" -name "*.md" -exec basename {} .md \; 2>/dev/null | sort | fzf --prompt="Delete project: ")
+                                if [ -n "$del_project" ]; then
+                                    project_note "$del_project" "rm"
+                                fi
+                            fi
+                            ;;
+                        "───────────────")
+                            # Separator, ignore
+                            ;;
+                        *)
+                            # Regular project name - edit it
+                            project_note "$selection" "edit"
+                            ;;
+                    esac
+                fi
+            else
+                project_name="$1"
+                shift
+                if [ -z "$*" ]; then
+                    # View project contents
+                    project_note "$project_name"
+                else
+                    # Handle edit/rm commands
+                    project_note "$project_name" "$*"
+                fi
+            fi
+            ;;
         search)
             shift
             if [ -n "$*" ]; then
                 grep -i "$*" "${NOTES_FILE:-$HOME/Documents/ButterNotes/notes.md}" 2>/dev/null || echo "No matches found"
             else
                 # Interactive search with fzf if available
-                if command -v fzf >/dev/null 2>&1 && [ -f "${NOTES_FILE:-$HOME/Documents/ButterNotes/notes.md}" ]; then
+                if command -v fzf >/dev/null 2>&1 && [ -t 0 ] && [ -t 1 ] && [ -f "${NOTES_FILE:-$HOME/Documents/ButterNotes/notes.md}" ]; then
                     note | fzf --preview 'echo {}' --height=50% --layout=reverse
                 else
                     echo "Enter search term (or install fzf for interactive search):"
@@ -295,6 +704,58 @@ main() {
             ;;
         edit)
             note edit
+            ;;
+        notes|n)
+            shift
+            notes_command "$@"
+            ;;
+        p)
+            shift
+            if [ "$1" = "list" ]; then
+                list_projects
+            elif [ -z "$1" ]; then
+                # Interactive project manager
+                selection=$(select_project)
+                if [ -n "$selection" ]; then
+                    case "$selection" in
+                        "📝 New project")
+                            read -p "New project name: " new_name
+                            if [ -n "$new_name" ]; then
+                                project_note "$new_name" "edit"
+                            fi
+                            ;;
+                        "🗑️  Delete project")
+                            # Source config to get BUTTER_NOTES_DIR
+                            [ -f "$BUTTER_DIR/config/butter.conf" ] && source "$BUTTER_DIR/config/butter.conf"
+                            projects_dir="${BUTTER_NOTES_DIR:-$HOME/Documents/ButterNotes}/projects"
+                            
+                            if command -v fzf >/dev/null 2>&1 && [ -t 0 ] && [ -t 1 ]; then
+                                del_project=$(find "$projects_dir" -name "*.md" -exec basename {} .md \; 2>/dev/null | sort | fzf --prompt="Delete project: ")
+                                if [ -n "$del_project" ]; then
+                                    project_note "$del_project" "rm"
+                                fi
+                            fi
+                            ;;
+                        "───────────────")
+                            # Separator, ignore
+                            ;;
+                        *)
+                            # Regular project name - edit it
+                            project_note "$selection" "edit"
+                            ;;
+                    esac
+                fi
+            else
+                project_name="$1"
+                shift
+                if [ -z "$*" ]; then
+                    # View project contents
+                    project_note "$project_name"
+                else
+                    # Handle edit/rm commands
+                    project_note "$project_name" "$*"
+                fi
+            fi
             ;;
         help|--help|-h)
             show_help

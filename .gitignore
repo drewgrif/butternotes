@@ -1,0 +1,28 @@
+# Claude Code development files
+CLAUDE.md
+
+# User data files (don't upload personal notes)
+notes.md
+todos.md
+projects/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.bak
+*.orig

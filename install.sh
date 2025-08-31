@@ -11,7 +11,6 @@ echo
 
 # Make scripts executable
 chmod +x "$BUTTER_DIR/bin/butter"
-chmod +x "$BUTTER_DIR/bin/butter-rofi"
 
 # Check dependencies
 echo "Checking dependencies..."
@@ -24,9 +23,7 @@ command -v bash >/dev/null 2>&1 || missing_deps="$missing_deps bash"
 # Optional but recommended
 optional_deps=""
 command -v fzf >/dev/null 2>&1 || optional_deps="$optional_deps fzf"
-command -v rofi >/dev/null 2>&1 || optional_deps="$optional_deps rofi"
 command -v xclip >/dev/null 2>&1 && command -v wl-copy >/dev/null 2>&1 || optional_deps="$optional_deps xclip/wl-clipboard"
-command -v notify-send >/dev/null 2>&1 || optional_deps="$optional_deps libnotify"
 
 if [ -n "$missing_deps" ]; then
     echo "❌ Missing required dependencies:$missing_deps"
@@ -104,10 +101,6 @@ LEGACY_TODOS_FILE="\$HOME/.tasks"
 # Editor preference
 BUTTER_EDITOR="\${BUTTER_EDITOR:-\${EDITOR:-nvim}}"
 
-# Rofi settings
-BUTTER_ROFI_WIDTH="\${BUTTER_ROFI_WIDTH:-50}"
-BUTTER_ROFI_LINES="\${BUTTER_ROFI_LINES:-15}"
-
 # Create notes directory if it doesn't exist
 mkdir -p "\$BUTTER_NOTES_DIR"
 EOF
@@ -135,51 +128,31 @@ if [[ "${add_shell,,}" != "n" ]]; then
     
     # Check if already added
     if grep -q "# Butter - Note and todo management" "$SHELL_CONFIG" 2>/dev/null; then
-        echo "✅ Butter already in $SHELL_CONFIG"
-    else
-        echo "" >> "$SHELL_CONFIG"
-        echo "# Butter - Note and todo management" >> "$SHELL_CONFIG"
-        echo "export PATH=\"$BUTTER_DIR/bin:\$PATH\"" >> "$SHELL_CONFIG"
-        echo "alias b='butter --no-gui'" >> "$SHELL_CONFIG"
-        echo "alias bg='butter --gui'" >> "$SHELL_CONFIG"
-        echo "alias bc='butter --no-gui clip'" >> "$SHELL_CONFIG"
-        echo "alias bt='butter --no-gui todo'" >> "$SHELL_CONFIG"
-        echo "✅ Added to $SHELL_CONFIG"
+        echo "⚠️  Butter already in $SHELL_CONFIG, updating aliases..."
+        # Remove old entries
+        sed -i '/# Butter - Note and todo management/,/^$/d' "$SHELL_CONFIG"
     fi
+    
+    # Add updated configuration
+    echo "" >> "$SHELL_CONFIG"
+    echo "# Butter - Note and todo management" >> "$SHELL_CONFIG"
+    echo "export PATH=\"$BUTTER_DIR/bin:\$PATH\"" >> "$SHELL_CONFIG"
+    echo "alias b='butter'" >> "$SHELL_CONFIG"
+    echo "alias bc='butter clip'" >> "$SHELL_CONFIG"
+    echo "alias bt='butter todo'" >> "$SHELL_CONFIG"
+    echo "✅ Added to $SHELL_CONFIG"
 fi
-
-# Show keybinding instructions
-echo
-echo "🖥️  For GUI keybindings:"
-echo
-echo "For sxhkd, add to ~/.config/sxhkd/sxhkdrc:"
-echo "─────────────────────────────────────────"
-echo "super + n"
-echo "    $BUTTER_DIR/bin/butter --gui"
-echo ""
-echo "super + shift + n"
-echo "    $BUTTER_DIR/bin/butter --gui clip"
-echo ""
-echo "super + alt + n"
-echo "    $BUTTER_DIR/bin/butter --gui todos"
-echo "─────────────────────────────────────────"
-echo
-echo "For dwm, add to config.h:"
-echo "─────────────────────────────────────────"
-echo "static const char *buttercmd[] = { \"$BUTTER_DIR/bin/butter\", \"--gui\", NULL };"
-echo "static const char *butterclipcmd[] = { \"$BUTTER_DIR/bin/butter\", \"--gui\", \"clip\", NULL };"
-echo "{ MODKEY, XK_n, spawn, {.v = buttercmd } },"
-echo "{ MODKEY|ShiftMask, XK_n, spawn, {.v = butterclipcmd } },"
-echo "─────────────────────────────────────────"
 
 echo
 echo "✅ Installation complete!"
 echo
 echo "📚 Quick start:"
 echo "  1. Reload your shell: source $SHELL_CONFIG"
-echo "  2. Try: butter help"
+echo "  2. Try: b    (interactive mode)"
 echo "  3. Add a note: butter \"My first note\""
-echo "  4. Save clipboard: butter clip"
+echo "  4. Save clipboard: bc"
+echo "  5. Add a todo: bt \"Fix the thing\""
+echo "  6. Interactive selection: butter project    (uses fzf if available)"
 echo
 echo "Notes location: $NOTES_DIR"
 echo "Config file: $CONFIG_FILE"

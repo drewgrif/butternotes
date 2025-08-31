@@ -1,67 +1,289 @@
-# ButterNotes
+# 🧈 ButterNotes
 
-A streamlined note-taking and todo management system for the terminal. Simple, fast, and focused.
+![Made for Linux](https://img.shields.io/badge/Made%20for-Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
+![Terminal Based](https://img.shields.io/badge/Terminal-Based-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white)
 
-## Features
+A streamlined note-taking and todo management system for the terminal.  
+Following the "inbox first, organize later" philosophy with smart fzf-enhanced project management.
 
-- **Single file storage** - Everything in `notes.md` and `todos.md`
-- **Interactive sub-prompts** - Dedicated modes for notes and todos
-- **Mobile-friendly** - Markdown files sync with any mobile app
-- **No dependencies** - Pure bash, works anywhere
-- **Terminal-only** - Fast and lightweight
+> Part of the **JustAGuy Linux** productivity toolkit.
 
-## Quick Start
+## 📜 Philosophy
 
+ButterNotes embraces the **inbox workflow**:
+- **Quick Capture First** - Never lose a thought while deciding where it goes
+- **Organize Later** - Clean separation between rapid note-taking and structured documentation  
+- **Plain Text Power** - Markdown files that sync with any mobile app
+- **Terminal Focused** - Fast, keyboard-driven, distraction-free
+
+**Two complementary workflows:**
+1. **Inbox** (`notes.md` + `todos.md`) - Stream of consciousness, rapid capture
+2. **Projects** (`projects/*.md`) - Organized documentation with fzf management
+
+---
+
+## ✨ Features
+
+- **🚀 Fast Capture**: Instant note and todo entry from anywhere
+- **📝 Inbox System**: Stream-of-consciousness notes with timestamps  
+- **✅ Smart Todos**: Persistent numbering, markdown checkboxes, easy toggling
+- **📁 Project Manager**: fzf-powered file management with preview
+- **🔍 Interactive Search**: fzf integration for browsing and searching
+- **📱 Mobile Sync**: Standard markdown files work with any mobile app
+- **🎯 Terminal Native**: Clean sub-prompts, keyboard shortcuts, no GUI bloat
+- **⚡ Shell Integration**: Seamless aliases and PATH integration
+
+---
+
+## 🚀 Installation
+
+### Quick Install
 ```bash
-git clone https://github.com/yourusername/butternotes.git
+git clone https://github.com/drewgrif/butternotes.git
 cd butternotes
+chmod +x install.sh
 ./install.sh
 ```
 
-Then just run `b` to start:
+The installer will:
+- Configure your notes storage location (mobile-sync friendly)
+- Set up shell integration (aliases + PATH)  
+- Check for optional dependencies (fzf recommended)
 
+### Dependencies
+
+**Required:**
+- `bash` - Core functionality
+- `xclip` or `wl-clipboard` - Clipboard integration
+
+**Recommended:**
+- `fzf` - Enhanced project management and search
+
+---
+
+## 🎯 Quick Start
+
+### Inbox Capture
 ```bash
-$ b
-🧈 Butter - Interactive Mode
-butter> n              # Enter notes mode
-butter/notes> Hello world
-✅ Note added
-butter/notes> ..       # Back to main
-butter> q              # Quit
+# Add notes instantly
+butter "Random brilliant idea"
+butter clip                    # Save clipboard as note
+
+# Manage todos  
+butter todo "Fix the thing"
+butter todos                   # List all todos
 ```
 
-## Usage
+### Project Management
+```bash
+# Launch fzf project manager
+butter project
+# ┌─ Project Manager ─────────────────────┐
+# │ 📝 New project                        │
+# │ 🗑️  Delete project                    │  
+# │ 🚪 Exit                               │
+# │ ───────────────────────────────────── │
+# │ homelab                   [preview]   │
+# │ python                                │
+# │ nextcloud                             │
+# └───────────────────────────────────────┘
+```
 
 ### Interactive Mode
-- `b` - Launch butter
-- `n` - Notes mode (`a` add, `l` list, `e` edit, `..` back)
-- `t` - Todos mode (`a` add, `l` list, `d` done, `..` back)
-- `q` - Quit
-
-### Direct Commands
 ```bash
-butter "Quick note"
-butter todo "Task to do"
-butter list
-butter todos
+$ b                           # Launch butter
+🧈 Butter - Interactive Mode
+
+Commands:
+  n    - Notes mode            (quick capture)
+  t    - Todo mode             (task management)  
+  p    - Projects mode         (fzf manager)
+  l    - List notes
+  q    - Quit
+
+butter> p                     # Opens fzf project manager
+butter> n                     # Enter notes sub-prompt
+butter/notes> a Hello world   # Add note
+butter/notes> ..              # Back to main
 ```
 
-## Philosophy
+---
 
-ButterNotes follows the Unix philosophy: do one thing and do it well. It's designed around two simple files:
-- `notes.md` - All your notes, timestamped and appended
-- `todos.md` - Your task list with persistent numbering
+## 📚 Core Workflows
 
-No categories, no folders, no complexity. Just capture thoughts and track tasks.
+### 1. Inbox Philosophy
 
-## Installation
+**The Problem**: Deciding where a note belongs interrupts your thinking.
 
-Run `./install.sh` for interactive setup, or manually:
+**The Solution**: Capture everything in the inbox first, organize later.
 
-1. Add `bin/` to your PATH
-2. Source the provided aliases
-3. Start with `b`
+```bash
+# Rapid capture - no decisions needed
+butter "Meeting notes from standup"
+butter "Bug in the authentication flow"  
+butter clip                              # Save interesting article
+butter todo "Review pull request #123"
+```
 
-## License
+**Result**: `~/Documents/ButterNotes/notes.md`
+```markdown
+[2025-01-15 09:30:15] Meeting notes from standup
+[2025-01-15 09:31:22] Bug in the authentication flow
+[2025-01-15 09:32:18] Interesting article about...
+```
 
-MIT
+### 2. Project Organization
+
+When you're ready to organize, use the **fzf project manager**:
+
+```bash
+butter project               # Launch manager
+# Select "📝 New project" → Create "authentication"
+# Move relevant notes to projects/authentication.md
+```
+
+**Advanced fzf controls:**
+- `Enter` - Edit selected project
+- `Ctrl-N` - Create new project  
+- `Ctrl-D` - Delete project
+- `Tab` - Toggle preview
+- `Escape` - Exit manager
+
+### 3. Todo Management
+
+```bash
+butter todo "Fix authentication bug"     # Add todo
+butter todos                             # List all
+
+# Interactive todo management  
+butter> t
+✅ Todo Mode
+butter/todos> a "New task"               # Add
+butter/todos> d 3                        # Toggle done #3  
+butter/todos> rm 5                       # Remove #5
+```
+
+---
+
+## 🗂️ File Structure
+
+```
+~/Documents/ButterNotes/          # Default (configurable)
+├── notes.md                      # 📥 Inbox - all notes  
+├── todos.md                      # ✅ Task list
+└── projects/                     # 📁 Organized docs
+    ├── homelab.md
+    ├── python.md
+    └── authentication.md
+```
+
+**Mobile Sync**: Place `ButterNotes/` in your cloud folder (Nextcloud, Dropbox, etc.) for automatic mobile sync with markdown apps.
+
+---
+
+## ⌨️ Shell Integration
+
+After installation, these aliases are available:
+
+```bash
+b         # Launch interactive mode
+bc        # Save clipboard as note  
+bt "task" # Add todo
+```
+
+**Advanced usage:**
+```bash
+butter "Quick note"                    # Direct note
+butter todo "Important task"          # Direct todo  
+butter project python                 # View python project
+butter project python edit           # Edit python project
+butter search                        # Interactive search
+```
+
+---
+
+## 🎨 Customization
+
+### Storage Location
+```bash
+./install.sh
+# Choose from:
+# 1) ~/Documents/ButterNotes/     (mobile sync)
+# 2) ~/notes/                     (simple)  
+# 3) ~/Nextcloud/Notes/           (Nextcloud)
+# 4) Custom location
+```
+
+### Configuration
+Edit `config/butter.conf`:
+```bash
+# Notes storage location
+BUTTER_NOTES_DIR="$HOME/Documents/ButterNotes"
+
+# Editor preference  
+BUTTER_EDITOR="${EDITOR:-nvim}"
+```
+
+---
+
+## 🤝 Similar Projects
+
+ButterNotes draws inspiration from:
+- **Getting Things Done** - Inbox methodology
+- **Zettelkasten** - Linked note-taking
+- **Plain text workflows** - Future-proof, tool-agnostic  
+
+**Why ButterNotes?**
+- Simpler than Obsidian for basic workflows
+- More organized than basic note scripts
+- Faster than GUI apps for terminal users
+- Better mobile sync than terminal-only solutions
+
+---
+
+## 🛠️ Development
+
+### Philosophy
+- **Keep notes/todos simple** - They work perfectly for fast capture
+- **Enhance projects** - Files benefit from management features  
+- **Terminal first** - No GUI bloat
+- **Plain text** - Tool-independent, future-proof
+
+### Contributing
+1. Fork the repository
+2. Create your feature branch
+3. Test with `./bin/butter --help`
+4. Submit a pull request
+
+---
+
+## 📄 License
+
+MIT License - Use it, modify it, share it.
+
+---
+
+## ☕ Support
+
+If ButterNotes has been helpful, consider buying me a coffee:
+
+<a href="https://www.buymeacoffee.com/justaguylinux" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy me a coffee" /></a>
+
+## 📺 Watch on YouTube
+
+Want to see productivity workflows in action?  
+🎥 Check out [JustAGuy Linux on YouTube](https://www.youtube.com/@JustAGuyLinux)
+
+---
+
+## 🙋 Community
+
+- **Issues**: [GitHub Issues](https://github.com/drewgrif/butternotes/issues)
+- **Discussions**: Share workflows and tips
+- **Pull Requests**: Contributions welcome
+
+---
+
+Made with 🧈 by [JustAGuyLinux](https://www.youtube.com/@justaguylinux)
+
+> **Note**: This project may transition to Codeberg in the future. Watch for updates!
