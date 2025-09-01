@@ -134,7 +134,7 @@ note_prompt() {
     echo
     
     while true; do
-        read -r -p "butter/notes> " input
+        read -r -p "🧈 butter/notes ❯ " input
         
         # Split input into command and args
         cmd="${input%% *}"
@@ -214,7 +214,7 @@ todo_prompt() {
     echo
     
     while true; do
-        read -r -p "butter/todos> " input
+        read -r -p "🧈 butter/todos ❯ " input
         
         # Split input into command and args
         cmd="${input%% *}"
@@ -429,7 +429,7 @@ projects_prompt() {
     echo
     
     while true; do
-        read -r -p "butter/projects> " input
+        read -r -p "🧈 butter/projects ❯ " input
         
         # Split input into command and args
         cmd="${input%% *}"
@@ -527,7 +527,7 @@ interactive_terminal() {
     echo
     
     while true; do
-        read -r -p "butter> " input
+        read -r -p "🧈 butter ❯ " input
         
         # Split input into command and args
         cmd="${input%% *}"
@@ -536,10 +536,10 @@ interactive_terminal() {
         
         case "$cmd" in
             n|note|notes)
-                notes_prompt
+                note_prompt
                 ;;
             t|todo|todos)
-                todos_prompt
+                todo_prompt
                 ;;
             l|list)
                 note
