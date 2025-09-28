@@ -1,5 +1,18 @@
 # 🧈 ButterNotes
 
+> **🚨 REPOSITORY MIGRATION NOTICE**
+>
+> This repository has moved to **[Codeberg](https://codeberg.org/justaguylinux/butternotes)**
+>
+> - **Primary repository**: https://codeberg.org/justaguylinux/butternotes
+> - **This GitHub repository**: Mirror only (read-only)
+> - **Migration deadline**: December 15, 2025 - GitHub mirror will be archived
+>
+> Please update your bookmarks and git remotes:
+> ```bash
+> git remote set-url origin https://codeberg.org/justaguylinux/butternotes.git
+> ```
+
 ![Made for Debian](https://img.shields.io/badge/Made_for-Debian-A81D33?style=for-the-badge)
 ![Made for Linux](https://img.shields.io/badge/Made_for-Linux-FCC624?style=for-the-badge)
 ![Terminal Based](https://img.shields.io/badge/Terminal-Based-4EAA25?style=for-the-badge)
@@ -7,7 +20,7 @@
 A streamlined note-taking and todo management system for the terminal.  
 Following the "inbox first, organize later" philosophy with smart fzf-enhanced project management.
 
-> Part of the **JustAGuy Linux** productivity toolkit.
+> Part of the [JustAGuy Linux](https://codeberg.org/justaguylinux) productivity toolkit.
 
 ## 📜 Philosophy
 
@@ -40,7 +53,7 @@ ButterNotes embraces the **inbox workflow**:
 
 ### Quick Install
 ```bash
-git clone https://github.com/drewgrif/butternotes.git
+git clone https://codeberg.org/justaguylinux/butternotes.git
 cd butternotes
 chmod +x install.sh
 ./install.sh
@@ -280,12 +293,10 @@ Want to see productivity workflows in action?
 
 ## 🙋 Community
 
-- **Issues**: [GitHub Issues](https://github.com/drewgrif/butternotes/issues)
+- **Issues**: [Codeberg Issues](https://codeberg.org/justaguylinux/butternotes/issues)
 - **Discussions**: Share workflows and tips
 - **Pull Requests**: Contributions welcome
 
 ---
 
 Made with 🧈 by [JustAGuyLinux](https://www.youtube.com/@justaguylinux)
-
-> **Note**: This project may transition to Codeberg in the future. Watch for updates!
